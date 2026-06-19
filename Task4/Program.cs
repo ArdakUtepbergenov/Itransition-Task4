@@ -156,7 +156,14 @@ app.MapPost("/api/register", async (RegisterRequest request) =>
         var newUser = new User {Username = request.Username, Password = request.Password, Email = request.Email, Status = "Unverified", LastLogin = DateTime.Now, VerificationToken = Guid.NewGuid().ToString()};
 db.Users.Add(newUser);
 db.SaveChanges();
-SendVerificationEmail(newUser.Email, newUser.VerificationToken);
+try
+{
+    await SendVerificationEmail(newUser.Email, newUser.VerificationToken);
+}
+catch (Exception ex)
+{
+    Console.WriteLine("EMAIL ERROR: " + ex.Message);
+}
 return Results.Ok(new {success = true, message = "Аккаунт зарегистрирован", userId = newUser.Id});
     }
     catch (Exception)
