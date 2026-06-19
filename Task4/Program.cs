@@ -1,5 +1,6 @@
 using System.Numerics;
 using Microsoft.EntityFrameworkCore;
+using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors();
@@ -47,17 +48,17 @@ app.MapPost("/api/login", (LoginRequest request) =>
 
 async Task SendVerificationEmail(string toEmail, string token)
 {
-    var message = new MimeKit.MimeMessage();
-    message.From.Add(new MimeKit.MailboxAddress("Task4 App", "utepbergenovardak8@gmail.com"));
-    message.To.Add(new MimeKit.MailboxAddress("", toEmail));
-    message.Subject = "Подтверждение регистрации";
+    IResend resend = ResendClient.Create(Environment.GetEnvironmentVariable("RESEND_API_KEY"));
+    
     var link = $"https://itransition-task4-production.up.railway.app/api/verify?token={token}";
-    message.Body = new MimeKit.TextPart("plain") { Text = $"Перейдите по ссылке для подтверждения: {link}" };
-    using var client = new MailKit.Net.Smtp.SmtpClient();
-    await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
-    await client.AuthenticateAsync("utepbergenovardak8@gmail.com", Environment.GetEnvironmentVariable("EMAIL_PASSWORD"));
-    await client.SendAsync(message);
-    await client.DisconnectAsync(true);
+    
+    await resend.EmailSendAsync(new EmailMessage()
+    {
+        From = "onboarding@resend.dev",
+        To = toEmail,
+        Subject = "Подтверждение регистрации",
+        HtmlBody = $"<p>Перейдите по ссылке для подтверждения: <a href=\"{link}\">{link}</a></p>",
+    });
 }
 
 app.MapPost("/api/delete", (ActionRequest request) =>
