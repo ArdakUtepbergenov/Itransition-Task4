@@ -5,6 +5,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors();
 var app = builder.Build();
 
+using (var db = new Database())
+{
+    db.Database.Migrate();
+}
+
 app.MapGet("/users", (int? userId) =>
 {
     if (userId == null)
@@ -46,7 +51,7 @@ async Task SendVerificationEmail(string toEmail, string token)
     message.From.Add(new MimeKit.MailboxAddress("Task4 App", "utepbergenovardak8@gmail.com"));
     message.To.Add(new MimeKit.MailboxAddress("", toEmail));
     message.Subject = "Подтверждение регистрации";
-    var link = $"http://localhost:5173/api/verify?token={token}";
+    var link = $"https://itransition-task4-production.up.railway.app/api/verify?token={token}";
     message.Body = new MimeKit.TextPart("plain") { Text = $"Перейдите по ссылке для подтверждения: {link}" };
     using var client = new MailKit.Net.Smtp.SmtpClient();
     await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
