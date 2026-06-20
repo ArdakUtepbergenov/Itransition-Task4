@@ -11,20 +11,19 @@ using (var db = new Database())
     db.Database.Migrate();
 }
 
-app.MapGet("/users", (int? userId) =>
+app.MapGet("/users", (string? sessionToken) =>
 {
-    if (userId == null)
+    if (sessionToken == null)
     {
         return Results.Unauthorized();
     }
     using var db = new Database();
-    var users = db.Users.Select(u => new {u.Id, u.Username, u.Email, u.Status, u.LastLogin}).ToList();
-    var currentUser = db.Users.FirstOrDefault(u => u.Id == userId);
+    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == sessionToken);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
-    return Results.Unauthorized();
+        return Results.Unauthorized();
     }
-
+    var users = db.Users.Select(u => new {u.Id, u.Username, u.Email, u.Status, u.LastLogin}).ToList();
     return Results.Ok(users);
 });
 
@@ -38,8 +37,9 @@ app.MapPost("/api/login", (LoginRequest request) =>
     if(user!=null)
     {
         user.LastLogin = DateTime.Now;
+        user.SessionToken = Guid.NewGuid().ToString();
         db.SaveChanges();
-        return Results.Ok(new {success = true, userId = user.Id});
+        return Results.Ok(new {success = true, sessionToken = user.SessionToken});
     } else
     {
         return Results.Ok(new {success = false});
@@ -64,7 +64,7 @@ async Task SendVerificationEmail(string toEmail, string token)
 app.MapPost("/api/delete", (ActionRequest request) =>
 {
     using var db = new Database();
-    var currentUser = db.Users.FirstOrDefault(u => u.Id == request.userId);
+    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
@@ -86,7 +86,7 @@ app.MapPost("/api/deleteUnverified", (ActionRequest request) =>
 {
     using var db = new Database();
     var unverifiedUsers = db.Users.Where(u => u.Status == "Unverified").ToList();
-    var currentUser = db.Users.FirstOrDefault(u => u.Id == request.userId);
+    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
@@ -101,7 +101,7 @@ app.MapPost("/api/block", (ActionRequest request) =>
 {
     using var db = new Database();
     
-    var currentUser = db.Users.FirstOrDefault(u => u.Id == request.userId);
+    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
@@ -122,7 +122,7 @@ app.MapPost("/api/block", (ActionRequest request) =>
 app.MapPost("/api/unblock", (ActionRequest request) =>
 {
     using var db = new Database();
-    var currentUser = db.Users.FirstOrDefault(u => u.Id == request.userId);
+    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
@@ -144,6 +144,7 @@ app.MapPost("/api/unblock", (ActionRequest request) =>
 app.MapPost("/api/register", async (RegisterRequest request) =>
 {
     using var db = new Database();
+    
 
     if (request.Password != request.ConfirmPassword)
     {
@@ -153,7 +154,7 @@ app.MapPost("/api/register", async (RegisterRequest request) =>
     try
     {
         
-        var newUser = new User {Username = request.Username, Password = request.Password, Email = request.Email, Status = "Unverified", LastLogin = DateTime.Now, VerificationToken = Guid.NewGuid().ToString()};
+        var newUser = new User {Username = request.Username, Password = request.Password, Email = request.Email, Status = "Unverified", LastLogin = DateTime.Now, VerificationToken = Guid.NewGuid().ToString(), SessionToken = Guid.NewGuid().ToString()};
 db.Users.Add(newUser);
 db.SaveChanges();
 try
@@ -164,7 +165,7 @@ catch (Exception ex)
 {
     Console.WriteLine("EMAIL ERROR: " + ex.Message);
 }
-return Results.Ok(new {success = true, message = "Аккаунт зарегистрирован", userId = newUser.Id});
+return Results.Ok(new {success = true, message = "Аккаунт зарегистрирован", sessionToken = newUser.SessionToken});
     }
     catch (Exception)
     {
@@ -191,7 +192,7 @@ app.Run();
 
 record LoginRequest(string Username, string Password);
 record RegisterRequest(string Username, string Password, string ConfirmPassword, string Email);
-record ActionRequest(int userId, int[] ids);
+record ActionRequest(string sessionToken, int[] ids);
 public class User
 {
     public int Id { get; set; }
