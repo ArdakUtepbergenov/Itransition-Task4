@@ -36,7 +36,7 @@ app.MapPost("/api/login", (LoginRequest request) =>
 
     if(user!=null)
     {
-        user.LastLogin = DateTime.Now;
+        user.LastLogin = DateTime.UtcNow;
         user.SessionToken = Guid.NewGuid().ToString();
         db.SaveChanges();
         return Results.Ok(new {success = true, sessionToken = user.SessionToken});
@@ -154,7 +154,7 @@ app.MapPost("/api/register", async (RegisterRequest request) =>
     try
     {
         
-        var newUser = new User {Username = request.Username, Password = request.Password, Email = request.Email, Status = "Unverified", LastLogin = DateTime.Now, VerificationToken = Guid.NewGuid().ToString(), SessionToken = Guid.NewGuid().ToString()};
+        var newUser = new User {Username = request.Username, Password = request.Password, Email = request.Email, Status = "Unverified", LastLogin = DateTime.UtcNow, VerificationToken = Guid.NewGuid().ToString(), SessionToken = Guid.NewGuid().ToString()};
 db.Users.Add(newUser);
 db.SaveChanges();
 try
