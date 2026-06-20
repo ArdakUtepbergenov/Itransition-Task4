@@ -202,6 +202,7 @@ public class User
     public DateTime LastLogin { get; set; }
     public string Status { get; set; }
     public string VerificationToken { get; set; }
+    public string SessionToken { get; set; }
 }
 
 public class Database : DbContext
