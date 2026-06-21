@@ -1,10 +1,20 @@
-using System.Numerics;
 using Microsoft.EntityFrameworkCore;
 using Resend;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors();
+builder.Services.AddAuthentication("MyCookieAuth")
+    .AddCookie("MyCookieAuth", options =>
+    {
+        options.Cookie.HttpOnly = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(24);
+    });
+
 var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
 
 using (var db = new Database())
 {
@@ -27,23 +37,24 @@ app.MapGet("/users", (string? sessionToken) =>
     return Results.Ok(users);
 });
 
-app.MapPost("/api/login", (LoginRequest request) =>
+app.MapPost("/api/login", async (LoginRequest request, HttpContext context) =>
 {
     using var db = new Database();
+    var user = db.Users.FirstOrDefault(u => u.Username == request.Username && u.Password == request.Password);
 
-    var user = db.Users.FirstOrDefault(u=> u.Username == request.Username && u.Password == request.Password);
-    
-
-    if(user!=null)
+    if (user != null)
     {
         user.LastLogin = DateTime.UtcNow;
-        user.SessionToken = Guid.NewGuid().ToString();
         db.SaveChanges();
-        return Results.Ok(new {success = true, sessionToken = user.SessionToken});
-    } else
-    {
-        return Results.Ok(new {success = false});
+
+        var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()) };
+        var identity = new ClaimsIdentity(claims, "MyCookieAuth");
+        var principal = new ClaimsPrincipal(identity);
+        await context.SignInAsync("MyCookieAuth", principal);
+
+        return Results.Ok(new {success = true});
     }
+    return Results.Ok(new {success = false});
 });
 
 async Task SendVerificationEmail(string toEmail, string token)
