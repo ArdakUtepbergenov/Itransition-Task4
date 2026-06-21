@@ -50,7 +50,7 @@ app.MapGet("/users", (HttpContext context) =>
 app.MapPost("/api/login", async (LoginRequest request, HttpContext context) =>
 {
     using var db = new Database();
-    var user = db.Users.FirstOrDefault(u => u.Username == request.Username && u.Password == request.Password);
+    var user = db.Users.FirstOrDefault(u => (u.Username == request.Username || u.Email == request.Username) && u.Password == request.Password);
 
     if (user != null)
     {
