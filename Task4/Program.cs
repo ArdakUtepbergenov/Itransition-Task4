@@ -11,6 +11,7 @@ builder.Services.AddAuthentication("MyCookieAuth")
         options.Cookie.HttpOnly = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(24);
     });
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 app.UseAuthentication();
@@ -21,14 +22,18 @@ using (var db = new Database())
     db.Database.Migrate();
 }
 
-app.MapGet("/users", (string? sessionToken) =>
+app.MapGet("/users", (HttpContext context) =>
 {
-    if (sessionToken == null)
+    if (!context.User.Identity.IsAuthenticated)
     {
         return Results.Unauthorized();
     }
+    
+    var userIdString = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    int userId = int.Parse(userIdString);
+    
     using var db = new Database();
-    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == sessionToken);
+    var currentUser = db.Users.FirstOrDefault(u => u.Id == userId);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
@@ -36,6 +41,9 @@ app.MapGet("/users", (string? sessionToken) =>
     var users = db.Users.Select(u => new {u.Id, u.Username, u.Email, u.Status, u.LastLogin}).ToList();
     return Results.Ok(users);
 });
+
+
+
 
 app.MapPost("/api/login", async (LoginRequest request, HttpContext context) =>
 {
@@ -72,15 +80,23 @@ async Task SendVerificationEmail(string toEmail, string token)
     });
 }
 
-app.MapPost("/api/delete", (ActionRequest request) =>
+app.MapPost("/api/delete", (int[] ids, HttpContext context) =>
 {
+    if (!context.User.Identity.IsAuthenticated)
+    {
+        return Results.Unauthorized();
+    }
+    
+    var userIdString = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    int currentUserId = int.Parse(userIdString);
+
     using var db = new Database();
-    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
+    var currentUser = db.Users.FirstOrDefault(u => u.Id == currentUserId);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
     }
-    foreach (var id in request.ids)
+    foreach (var id in ids)
     {
         var user = db.Users.FirstOrDefault(u => u.Id == id);
         if (user != null)
@@ -93,11 +109,19 @@ app.MapPost("/api/delete", (ActionRequest request) =>
     return Results.Ok();
 });
 
-app.MapPost("/api/deleteUnverified", (ActionRequest request) =>
+app.MapPost("/api/deleteUnverified", (HttpContext context) =>
 {
+    if (!context.User.Identity.IsAuthenticated)
+    {
+        return Results.Unauthorized();
+    }
+    
+    var userIdString = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    int currentUserId = int.Parse(userIdString);
+
     using var db = new Database();
     var unverifiedUsers = db.Users.Where(u => u.Status == "Unverified").ToList();
-    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
+    var currentUser = db.Users.FirstOrDefault(u => u.Id == currentUserId);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
@@ -108,17 +132,24 @@ app.MapPost("/api/deleteUnverified", (ActionRequest request) =>
     return Results.Ok();
 });
 
-app.MapPost("/api/block", (ActionRequest request) =>
+app.MapPost("/api/block", (int[] ids, HttpContext context) =>
 {
-    using var db = new Database();
+    if (!context.User.Identity.IsAuthenticated)
+    {
+        return Results.Unauthorized();
+    }
     
-    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
+    var userIdString = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    int currentUserId = int.Parse(userIdString);
+    
+    using var db = new Database();
+    var currentUser = db.Users.FirstOrDefault(u => u.Id == currentUserId);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
     }
     
-    foreach (var id in request.ids)
+    foreach (var id in ids)
     {
         var user = db.Users.FirstOrDefault(u => u.Id == id);
         if (user != null)
@@ -130,15 +161,23 @@ app.MapPost("/api/block", (ActionRequest request) =>
     return Results.Ok();
 });
 
-app.MapPost("/api/unblock", (ActionRequest request) =>
+app.MapPost("/api/unblock", (int[] ids, HttpContext context) =>
 {
+    if (!context.User.Identity.IsAuthenticated)
+    {
+        return Results.Unauthorized();
+    }
+    
+    var userIdString = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    int currentUserId = int.Parse(userIdString);
+    
     using var db = new Database();
-    var currentUser = db.Users.FirstOrDefault(u => u.SessionToken == request.sessionToken);
+    var currentUser = db.Users.FirstOrDefault(u => u.Id == currentUserId);
     if (currentUser == null || currentUser.Status == "Blocked")
     {
         return Results.Unauthorized();
     }
-    foreach (var id in request.ids)
+    foreach (var id in ids)
     {
         var user = db.Users.FirstOrDefault(u => u.Id == id);
         if (user != null)
@@ -152,7 +191,7 @@ app.MapPost("/api/unblock", (ActionRequest request) =>
     
 });
 
-app.MapPost("/api/register", async (RegisterRequest request) =>
+app.MapPost("/api/register", async (RegisterRequest request, HttpContext context) =>
 {
     using var db = new Database();
     
@@ -168,6 +207,10 @@ app.MapPost("/api/register", async (RegisterRequest request) =>
         var newUser = new User {Username = request.Username, Password = request.Password, Email = request.Email, Status = "Unverified", LastLogin = DateTime.UtcNow, VerificationToken = Guid.NewGuid().ToString(), SessionToken = Guid.NewGuid().ToString()};
 db.Users.Add(newUser);
 db.SaveChanges();
+var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, newUser.Id.ToString()) };
+var identity = new ClaimsIdentity(claims, "MyCookieAuth");
+var principal = new ClaimsPrincipal(identity);
+await context.SignInAsync("MyCookieAuth", principal);
 try
 {
     await SendVerificationEmail(newUser.Email, newUser.VerificationToken);
@@ -176,7 +219,7 @@ catch (Exception ex)
 {
     Console.WriteLine("EMAIL ERROR: " + ex.Message);
 }
-return Results.Ok(new {success = true, message = "Аккаунт зарегистрирован", sessionToken = newUser.SessionToken});
+return Results.Ok(new {success = true, message = "Аккаунт зарегистрирован"});
     }
     catch (Exception)
     {
@@ -196,6 +239,12 @@ app.MapGet("/api/verify", (string token) =>
         return Results.Ok("Email подтверждён!");
     }
     return Results.BadRequest("Неверная ссылка");
+});
+
+app.MapPost("/api/logout", async (HttpContext context) =>
+{
+    await context.SignOutAsync("MyCookieAuth");
+    return Results.Ok();
 });
 
 app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
