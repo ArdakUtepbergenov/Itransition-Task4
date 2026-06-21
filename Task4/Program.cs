@@ -247,7 +247,11 @@ app.MapPost("/api/logout", async (HttpContext context) =>
     return Results.Ok();
 });
 
-app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseCors(policy => policy
+    .WithOrigins("https://ardakutepbergenov.github.io")
+    .AllowAnyMethod()
+    .AllowAnyHeader()
+    .AllowCredentials());
 app.Run();
 
 record LoginRequest(string Username, string Password);
