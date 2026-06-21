@@ -1,14 +1,6 @@
-let params = new URLSearchParams(window.location.search);
-let currentUserId = params.get("userId") || localStorage.getItem("userId");
-
-if (!currentUserId) {
-    window.location.href = "index.html";
-} else {
-    localStorage.setItem("userId", currentUserId);
-}
-
-fetch(`http://localhost:5173/users?userId=${currentUserId}`, {
-    method: "GET"
+fetch("/users", {
+    method: "GET",
+    credentials: "include"
 })
 .then(response => {
     if (response.status === 401) {
@@ -17,6 +9,7 @@ fetch(`http://localhost:5173/users?userId=${currentUserId}`, {
     return response.json();
 })
 .then(data => {
+    document.getElementById("mainContent").style.display = "block";
     data.forEach(user => {
         document.getElementById("usersTableBody").innerHTML += `<tr><td><input type="checkbox" class="rowCheckbox" data-id="${user.id}"></td><td>${user.id}</td><td>${user.username}</td><td>${user.email}</td><td>${user.status}</td><td>${timeAgo(user.lastLogin)}</td></tr>`;
     });
@@ -28,13 +21,16 @@ fetch(`http://localhost:5173/users?userId=${currentUserId}`, {
 })
 
 function logout() {
-    localStorage.clear();
-    window.location.href = "index.html";
+    fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+    })
+    .then(() => window.location.href = "index.html");
 }
 
 function timeAgo(dateString) {
     let now = new Date();
-    let past = new Date(dateString);
+    let past = new Date(dateString + "Z");
     let diffInSeconds = (now - past) / 1000;
     let diffInMinutes = diffInSeconds / 60;
     let diffInHours = diffInMinutes / 60;
@@ -73,10 +69,11 @@ function blockSelected() {
             checkboxArray.push(parseInt(checkbox.dataset.id));
         }
     });
-    fetch("http://localhost:5173/api/block", {
+    fetch("/api/block", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({userId: parseInt(currentUserId), ids: checkboxArray})
+    credentials: "include",
+    body: JSON.stringify(checkboxArray)
     })
     .then(() => location.reload());
 }
@@ -88,10 +85,11 @@ function unblockSelected() {
             checkboxArray.push(parseInt(checkbox.dataset.id));
         }
     });
-    fetch("http://localhost:5173/api/unblock", {
+    fetch("/api/unblock", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({userId: parseInt(currentUserId), ids: checkboxArray})
+    credentials: "include",
+    body: JSON.stringify(checkboxArray)
     })
     .then(() => location.reload());
 }
@@ -103,19 +101,19 @@ function deleteSelected() {
             checkboxArray.push(parseInt(checkbox.dataset.id));
         }
     });
-    fetch("http://localhost:5173/api/delete", {
+    fetch("/api/delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({userId: parseInt(currentUserId), ids: checkboxArray})
+    credentials: "include",
+    body: JSON.stringify(checkboxArray)
     })
     .then(() => location.reload());
 }
 
 function deleteUnverified() {
-    fetch("http://localhost:5173/api/deleteUnverified", {
+    fetch("/api/deleteUnverified", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({userId: parseInt(currentUserId), ids: []})
+        credentials: "include",
     })
     .then(() => location.reload());
 }
